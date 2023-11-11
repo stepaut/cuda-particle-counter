@@ -7,20 +7,20 @@
 
 
 // Count of points in 2D area
-const unsigned COUNT = 5;
+const unsigned COUNT = 1000;
 // Begin of axises
 const int MIN = 0;
 // End of axises
-const int MAX = 100;
+const int MAX = 1000;
 // Size of checking block
-const unsigned SIZE = 50;
+const unsigned SIZE = 100;
 // Bins per axis
 const int BINS = (MAX - MIN) / SIZE;
 
 
 void generateArray(unsigned seed, int* a) {
 	for (int i = 0; i < COUNT; i++) {
-		srand(seed + i*i);
+		srand(seed * (i+1) + i * i);
 		a[i] = rand() % (MAX - MIN) + MIN;
 	}
 }
@@ -57,7 +57,7 @@ __global__ void wherePoint(int* x, int* y, unsigned *res) {
 }
 
 // Helper function for using CUDA to add vectors in parallel.
-cudaError_t addWithCuda(int* x, int* y, unsigned* res)
+cudaError_t runCuda(int* x, int* y, unsigned* res)
 {
 	int* dev_x = 0;
 	int* dev_y = 0;
@@ -137,19 +137,27 @@ Error:
 }
 
 int main() {
-	/*int x[COUNT] = { 1, 2, 3, 4, 5 };
-	int y[COUNT] = { 10, 20, 30, 40, 50 };*/
 	int x[COUNT];
-	generateArray(4213654, x);
+	generateArray(4213, x);
 	int y[COUNT];
-	generateArray(7028321, y);
+	generateArray(7028, y);
+
+	int dx[COUNT];
+	generateArray(9038, dx);
+	int dy[COUNT];
+	generateArray(1001, dy);
 
 	unsigned res[BINS * BINS] = {};
 
-	// Add vectors in parallel.
-	cudaError_t cudaStatus = addWithCuda(x, y, res);
+	clock_t start, stop;
+
+	start = clock();
+	cudaError_t cudaStatus = runCuda(x, y, res);
+	stop = clock();
+	float elapsedTime = (float)(stop - start) / (float)CLOCKS_PER_SEC * 1000.0f;
+	printf("Time to generate (CPU): %3.1f ms\n", elapsedTime);
 	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "addWithCuda failed!");
+		fprintf(stderr, "run failed!");
 		return 1;
 	}
 
