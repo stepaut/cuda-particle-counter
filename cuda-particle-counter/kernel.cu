@@ -57,7 +57,7 @@ __global__ void wherePoint(int* x, int* y, unsigned *res) {
 }
 
 // Helper function for using CUDA to add vectors in parallel.
-cudaError_t addWithCuda(int* x, int* y, unsigned size, unsigned* res)
+cudaError_t addWithCuda(int* x, int* y, unsigned* res)
 {
 	int* dev_x = 0;
 	int* dev_y = 0;
@@ -72,39 +72,39 @@ cudaError_t addWithCuda(int* x, int* y, unsigned size, unsigned* res)
 	}
 
 	// Allocate GPU buffers
-	cudaStatus = cudaMalloc((void**)&dev_res, size * sizeof(unsigned));
+	cudaStatus = cudaMalloc((void**)&dev_res, BINS * BINS * sizeof(unsigned));
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMalloc failed!");
 		goto Error;
 	}
 
-	cudaStatus = cudaMalloc((void**)&dev_x, size * sizeof(int));
+	cudaStatus = cudaMalloc((void**)&dev_x, COUNT * sizeof(int));
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMalloc failed!");
 		goto Error;
 	}
 
-	cudaStatus = cudaMalloc((void**)&dev_y, size * sizeof(int));
+	cudaStatus = cudaMalloc((void**)&dev_y, COUNT * sizeof(int));
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMalloc failed!");
 		goto Error;
 	}
 
 	// Copy input vectors from host memory to GPU buffers.
-	cudaStatus = cudaMemcpy(dev_x, x, size * sizeof(int), cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(dev_x, x, COUNT * sizeof(int), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy failed!");
 		goto Error;
 	}
 
-	cudaStatus = cudaMemcpy(dev_y, y, size * sizeof(int), cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(dev_y, y, COUNT * sizeof(int), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy failed!");
 		goto Error;
 	}
 
 	// Launch a kernel on the GPU with one thread for each element.
-	wherePoint << <1, size >> > (dev_x, dev_y, dev_res);
+	wherePoint << <1, COUNT >> > (dev_x, dev_y, dev_res);
 
 	// Check for any errors launching the kernel
 	cudaStatus = cudaGetLastError();
@@ -122,7 +122,7 @@ cudaError_t addWithCuda(int* x, int* y, unsigned size, unsigned* res)
 	}
 
 	// Copy output vector from GPU buffer to host memory.
-	cudaStatus = cudaMemcpy(res, dev_res, size * sizeof(unsigned), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(res, dev_res, BINS * BINS * sizeof(unsigned), cudaMemcpyDeviceToHost);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy failed!");
 		goto Error;
@@ -147,7 +147,7 @@ int main() {
 	unsigned res[BINS * BINS] = {};
 
 	// Add vectors in parallel.
-	cudaError_t cudaStatus = addWithCuda(x, y, COUNT, res);
+	cudaError_t cudaStatus = addWithCuda(x, y, res);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "addWithCuda failed!");
 		return 1;
