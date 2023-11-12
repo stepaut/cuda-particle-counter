@@ -7,7 +7,7 @@
 
 
 // Count of points in 2D area
-const unsigned COUNT = 1000;
+const unsigned COUNT = 1024; //TODO >1024 failed
 // Begin of axises
 const int MIN = 0;
 // End of axises
@@ -213,23 +213,23 @@ Error:
 }
 
 int main() {
-	int x[COUNT];
+	int *x = new int[COUNT];
 	generateCoordinate(4213, x);
 	//print1DArray(x, COUNT);
 
-	int y[COUNT];
+	int *y = new int[COUNT];
 	generateCoordinate(7028, y);
 	//print1DArray(y, COUNT);
 
-	int dx[COUNT];
+	int *dx = new int[COUNT];
 	generateSpeed(9038, dx);
 	//print1DArray(dx, COUNT);
 
-	int dy[COUNT];
+	int *dy = new int[COUNT];
 	generateSpeed(1001, dy);
 	//print1DArray(dy, COUNT);
 
-	unsigned res[BINS * BINS];
+	unsigned *res = new unsigned[BINS * BINS];
 
 	clock_t start, stop;
 	cudaError_t cudaStatus;
