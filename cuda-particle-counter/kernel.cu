@@ -11,21 +11,97 @@ const unsigned COUNT = 1000;
 // Begin of axises
 const int MIN = 0;
 // End of axises
-const int MAX = 1000;
+const int MAX = 100;
 // Size of checking block
-const unsigned SIZE = 100;
+const unsigned SIZE = 20;
 // Bins per axis
 const int BINS = (MAX - MIN) / SIZE;
+// Iterations of movement
+const unsigned ITERS = 50;
+// Print arrays
+const bool DOOUTPUT = false;
 
 
-void generateArray(unsigned seed, int* a) {
+void generateCoordinate(unsigned seed, int* a) {
 	for (int i = 0; i < COUNT; i++) {
-		srand(seed * (i+1) + i * i);
+		srand(seed * (i + 1) + i * i);
 		a[i] = rand() % (MAX - MIN) + MIN;
 	}
 }
 
-__global__ void wherePoint(int* x, int* y, unsigned *res) {
+void generateSpeed(unsigned seed, int* a) {
+	for (int i = 0; i < COUNT; i++) {
+		srand(seed * (i + 1) + i * i);
+		a[i] = rand() % 20 - 10;
+	}
+}
+
+void applyMovement(int* a, int* da) {
+	for (int i = 0; i < COUNT; i++) {
+		a[i] += da[i];
+
+		if (a[i] > MAX) {
+			a[i] = MAX;
+		}
+
+		if (a[i] < MIN) {
+			a[i] = MIN;
+		}
+	}
+}
+
+void print2DArray(unsigned* a, unsigned shape) {
+	for (int i = 0; i < shape; i++) {
+		for (int j = 0; j < shape; j++) {
+			std::cout << a[i * shape + j];
+			std::cout << "\t";
+		}
+		std::cout << "\n";
+	}
+}
+
+void print1DArray(int* a, unsigned shape) {
+	for (int j = 0; j < shape; j++) {
+		std::cout << a[j];
+		std::cout << "\t";
+	}
+	std::cout << "\n";
+}
+
+void setArrayToZero(unsigned* a, unsigned shape) {
+	for (int i = 0; i < shape; i++) {
+		a[i] = 0;
+	}
+}
+
+void wherePointCPU(int* x, int* y, unsigned* res) {
+	for (int i = 0; i < COUNT; i++) {
+		int binX = -1;
+		int binY = -1;
+
+		char c = 0;
+
+		for (int k = 0; k < BINS; k++) {
+			if (MIN + k * SIZE <= x[i] && x[i] <= MIN + (k + 1) * SIZE) {
+				binX = k;
+				c++;
+			}
+
+			if (MIN + k * SIZE <= y[i] && y[i] <= MIN + (k + 1) * SIZE) {
+				binY = k;
+				c++;
+			}
+
+			if (c == 2) {
+				break;
+			}
+		}
+
+		res[binX * BINS + binY] += 1;
+	}
+}
+
+__global__ void wherePoint(int* x, int* y, unsigned* res) {
 	// --- The number of threads does not cover all the data size
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	int offset = blockDim.x * gridDim.x;
@@ -138,35 +214,48 @@ Error:
 
 int main() {
 	int x[COUNT];
-	generateArray(4213, x);
+	generateCoordinate(4213, x);
+	//print1DArray(x, COUNT);
+
 	int y[COUNT];
-	generateArray(7028, y);
+	generateCoordinate(7028, y);
+	//print1DArray(y, COUNT);
 
 	int dx[COUNT];
-	generateArray(9038, dx);
-	int dy[COUNT];
-	generateArray(1001, dy);
+	generateSpeed(9038, dx);
+	//print1DArray(dx, COUNT);
 
-	unsigned res[BINS * BINS] = {};
+	int dy[COUNT];
+	generateSpeed(1001, dy);
+	//print1DArray(dy, COUNT);
+
+	unsigned res[BINS * BINS];
 
 	clock_t start, stop;
+	cudaError_t cudaStatus;
 
-	start = clock();
-	cudaError_t cudaStatus = runCuda(x, y, res);
-	stop = clock();
-	float elapsedTime = (float)(stop - start) / (float)CLOCKS_PER_SEC * 1000.0f;
-	printf("Time to generate (CPU): %3.1f ms\n", elapsedTime);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "run failed!");
-		return 1;
-	}
+	float totalTimeCUDA = 0;
+	float totalTimeCPU = 0;
 
-	for (int i = 0; i < BINS; i++) {
-		for (int j = 0; j < BINS; j++) {
-			std::cout << res[i * BINS + j];
-			std::cout << "\t";
+	for (int k = 0; k < ITERS; k++) {
+		applyMovement(x, dx);
+		applyMovement(y, dy);
+
+		memset(res, 0, BINS * BINS);
+
+		start = clock();
+		cudaStatus = runCuda(x, y, res);
+		stop = clock();
+		float elapsedTime = (float)(stop - start) / (float)CLOCKS_PER_SEC * 1000.0f;
+		totalTimeCUDA += elapsedTime;
+		printf("Time: %3.1f ms\n", elapsedTime);
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "run failed!");
+			return 1;
 		}
-		std::cout << "\n";
+
+		if (DOOUTPUT)
+			print2DArray(res, BINS);
 	}
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
@@ -176,6 +265,32 @@ int main() {
 		fprintf(stderr, "cudaDeviceReset failed!");
 		return 1;
 	}
+
+	std::cout << "------------------------------------------------------------------- Without CUDA:\n";
+
+	// same without CUDA:
+	generateCoordinate(4213, x);
+	generateCoordinate(7028, y);
+
+	for (int k = 0; k < ITERS; k++) {
+		applyMovement(x, dx);
+		applyMovement(y, dy);
+
+		setArrayToZero(res, BINS * BINS);
+
+		start = clock();
+		wherePointCPU(x, y, res);
+		stop = clock();
+		float elapsedTime = (float)(stop - start) / (float)CLOCKS_PER_SEC * 1000.0f;
+		totalTimeCPU += elapsedTime;
+		printf("Time: %3.1f ms\n", elapsedTime);
+
+		if (DOOUTPUT)
+			print2DArray(res, BINS);
+	}
+
+	//printf("CUDA Time: %3.1f ms\n", totalTimeCUDA);
+	//printf("CPU Time: %3.1f ms\n", totalTimeCPU);
 
 	return 0;
 }
