@@ -7,7 +7,7 @@
 
 
 // Count of points in 2D area
-const unsigned COUNT = 1024; //TODO >1024 failed
+const unsigned COUNT = 1000000;
 // Begin of axises
 const int MIN = 0;
 // End of axises
@@ -179,8 +179,11 @@ cudaError_t runCuda(int* x, int* y, unsigned* res)
 		goto Error;
 	}
 
+	int threadsPerBlock = 256;
+	int blocks = COUNT / threadsPerBlock;
+
 	// Launch a kernel on the GPU with one thread for each element.
-	wherePoint << <1, COUNT >> > (dev_x, dev_y, dev_res);
+	wherePoint << <blocks, threadsPerBlock >> > (dev_x, dev_y, dev_res);
 
 	// Check for any errors launching the kernel
 	cudaStatus = cudaGetLastError();
@@ -233,6 +236,10 @@ int main() {
 
 	clock_t start, stop;
 	cudaError_t cudaStatus;
+	float elapsedTime;
+	cudaEvent_t startC, stopC;
+	cudaEventCreate(&startC);
+	cudaEventCreate(&stopC);
 
 	float totalTimeCUDA = 0;
 	float totalTimeCPU = 0;
@@ -243,10 +250,12 @@ int main() {
 
 		memset(res, 0, BINS * BINS);
 
-		start = clock();
+		cudaEventRecord(startC, 0);
 		cudaStatus = runCuda(x, y, res);
-		stop = clock();
-		float elapsedTime = (float)(stop - start) / (float)CLOCKS_PER_SEC * 1000.0f;
+		cudaEventRecord(stopC, 0);
+		cudaEventSynchronize(stopC);
+		cudaEventElapsedTime(&elapsedTime, startC, stopC);
+
 		totalTimeCUDA += elapsedTime;
 		printf("Time: %3.1f ms\n", elapsedTime);
 		if (cudaStatus != cudaSuccess) {
@@ -289,8 +298,8 @@ int main() {
 			print2DArray(res, BINS);
 	}
 
-	//printf("CUDA Time: %3.1f ms\n", totalTimeCUDA);
-	//printf("CPU Time: %3.1f ms\n", totalTimeCPU);
+	printf("CUDA Time: %3.1f ms\n", totalTimeCUDA);
+	printf("CPU Time: %3.1f ms\n", totalTimeCPU);
 
 	return 0;
 }
